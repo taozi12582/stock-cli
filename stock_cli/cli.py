@@ -9,6 +9,7 @@ stock-cli: A股股票数据CLI工具
   python3 -m stock_cli fundamental 000001.SZ
   python3 -m stock_cli risk 000001.SZ 600519.SH 000858.SZ
   python3 -m stock_cli screen --exclude-red --limit 50
+  python3 -m stock_cli screener
 """
 
 import argparse
@@ -152,6 +153,18 @@ def _safe_float(val, default=0.0):
         return default
 
 
+def cmd_screener(args):
+    from stock_cli.screener import run_screener
+    run_screener(
+        min_amount=args.min_amount,
+        max_pullback=args.max_pullback,
+        min_uptrend_gain=args.min_uptrend_gain,
+        min_history_days=args.min_history_days,
+        fundamental_filter=not args.no_fundamental_filter,
+        top_n=args.top_n,
+    )
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="stock-cli",
@@ -224,6 +237,21 @@ def build_parser():
     p_screen.add_argument("--limit", type=int, default=100, help="最大数量")
     p_screen.add_argument("--format", choices=["text", "json"], default="text")
     p_screen.set_defaults(func=cmd_screen)
+
+    # screener
+    p_scr = subparsers.add_parser("screener", help="楚云风选股初筛（强势股回调形态）")
+    p_scr.add_argument("--min-amount", type=float, default=2.0,
+                        help="最低日均成交额(亿)，默认2亿")
+    p_scr.add_argument("--max-pullback", type=float, default=0.382,
+                        help="最大回调比例(0-1)，默认0.382")
+    p_scr.add_argument("--min-uptrend-gain", type=float, default=0.15,
+                        help="前波上涨最低涨幅(0-1)，默认0.15")
+    p_scr.add_argument("--min-history-days", type=int, default=60,
+                        help="最低历史交易日数，默认60")
+    p_scr.add_argument("--no-fundamental-filter", action="store_true",
+                        help="跳过基本面排雷")
+    p_scr.add_argument("--top-n", type=int, default=50, help="最多输出数量")
+    p_scr.set_defaults(func=cmd_screener)
 
     return parser
 
