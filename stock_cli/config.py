@@ -1,6 +1,6 @@
 """
 Database configuration and connection management.
-Supports environment variables with fallback defaults.
+Credentials loaded from .env file or environment variables.
 """
 
 import os
@@ -9,24 +9,40 @@ from dataclasses import dataclass
 import pymysql
 
 
+def _load_dotenv():
+    """Simple .env loader (no python-dotenv dependency)."""
+    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+    if not os.path.exists(env_path):
+        return
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, val = line.partition("=")
+                os.environ.setdefault(key.strip(), val.strip())
+
+
+_load_dotenv()
+
+
 @dataclass
 class MySQLConfig:
-    host: str = "rm-bp1zrq0lt0hzy2v7tfo.mysql.rds.aliyuncs.com"
+    host: str = ""
     port: int = 3306
-    user: str = "taozi"
-    password: str = "Orangejuice123!"
-    database: str = "tzx-ow"
+    user: str = ""
+    password: str = ""
+    database: str = ""
     charset: str = "utf8mb4"
 
     @classmethod
     def from_env(cls):
         return cls(
-            host=os.getenv("MYSQL_HOST", cls.host),
-            port=int(os.getenv("MYSQL_PORT", cls.port)),
-            user=os.getenv("MYSQL_USER", cls.user),
-            password=os.getenv("MYSQL_PASSWORD", cls.password),
-            database=os.getenv("MYSQL_DATABASE", cls.database),
-            charset=os.getenv("MYSQL_CHARSET", cls.charset),
+            host=os.getenv("MYSQL_HOST", ""),
+            port=int(os.getenv("MYSQL_PORT", "3306")),
+            user=os.getenv("MYSQL_USER", ""),
+            password=os.getenv("MYSQL_PASSWORD", ""),
+            database=os.getenv("MYSQL_DATABASE", ""),
+            charset=os.getenv("MYSQL_CHARSET", "utf8mb4"),
         )
 
     def to_dict(self):

@@ -81,8 +81,8 @@ def run_screener(
     cursor.execute(f"""
         SELECT AVG(ret_20d) as avg_20d_ret FROM (
             SELECT ts_code,
-                   (POWER(MAX(CASE WHEN rn = 1 THEN close END) /
-                          NULLIF(MAX(CASE WHEN rn = 21 THEN close END), 0), 1) - 1) as ret_20d
+                   ((MAX(CASE WHEN rn = 1 THEN close END) /
+                     NULLIF(MAX(CASE WHEN rn = 21 THEN close END), 0)) - 1) as ret_20d
             FROM (
                 SELECT ts_code, close,
                        ROW_NUMBER() OVER (PARTITION BY ts_code ORDER BY trade_date DESC) as rn
@@ -173,6 +173,8 @@ def run_screener(
             row = cursor.fetchone()
             if row:
                 pledge, em, big4 = row
+                if em is None or em == "":
+                    continue
                 if is_red_alert(pledge, em, big4):
                     continue
                 c["pledge_status"] = pledge or "未知"
@@ -186,9 +188,10 @@ def run_screener(
 
     conn.close()
 
-    # Clean internal field
+    # Clean internal field + add metadata
     for c in result:
         c.pop("_recent_data", None)
+        c["latest_date"] = str(latest_date) if latest_date else None
 
     # Output
     log(f"\n=== 初筛结果: {len(result)} 只候选股 ===\n")
@@ -253,7 +256,7 @@ def _evaluate_stock(code, data, market_20d_ret, max_pullback, min_uptrend_gain):
 
     # Pullback depth
     pullback = (recent_high - current_close) / recent_high if recent_high > 0 else 0
-    if pullback <= 0 or pullback > 0.30:
+    if pullback <= 0 or pullback > max_pullback:
         return None
 
     # Find the low before the high (start of uptrend)
@@ -340,11 +343,13 @@ def _check_stabilization(data):
         if intraday_recovery > 0.04 and last_body > 0:
             signals.append("盘中回升>4%")
 
-    # Signal 4: One down day, next day recovers > 50%
+    # Signal 4: Next day recovers > 50% of prev day's full intraday decline (high to close)
     if prev_body < 0 and last_body > 0:
-        recovery = (last["close"] - prev["close"]) / abs(prev["close"] - prev["open"]) if (prev["close"] - prev["open"]) != 0 else 0
-        if recovery > 0.5:
-            signals.append("次日收回过半")
+        prev_decline = prev["high"] - prev["close"]
+        if prev_decline > 0:
+            recovery = (last["close"] - prev["close"]) / prev_decline
+            if recovery > 0.5:
+                signals.append("次日收回过半")
 
     # Signal 5: Small body consolidation after decline, then breakout
     if len(data) >= 5:

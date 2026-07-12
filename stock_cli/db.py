@@ -72,7 +72,7 @@ def fetch_stock_list_by_risk(exclude_red=True, green_only=False, limit=100):
                 FROM {FUNDAMENTAL_TABLE}
                 GROUP BY ts_code
             ) latest ON f.ts_code = latest.ts_code AND f.trade_date = latest.max_date
-            WHERE f.pledge_status IN ('未质押', '低比例')
+            WHERE f.pledge_status IN ('未质押', '低比例质押')
               AND f.earnings_management_level = '低'
               AND f.big4_audit = '是'
             ORDER BY f.ts_code
@@ -90,7 +90,7 @@ def fetch_stock_list_by_risk(exclude_red=True, green_only=False, limit=100):
                 FROM {FUNDAMENTAL_TABLE}
                 GROUP BY ts_code
             ) latest ON f.ts_code = latest.ts_code AND f.trade_date = latest.max_date
-            WHERE f.pledge_status NOT IN ('高比例', '刚解押')
+            WHERE f.pledge_status NOT IN ('高比例质押', '刚解押')
               AND NOT (f.earnings_management_level = '高' AND f.big4_audit = '否')
             ORDER BY f.ts_code
             LIMIT %s

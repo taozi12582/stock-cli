@@ -28,6 +28,7 @@ from stock_cli.risk import risk_label
 
 
 def cmd_context(args):
+    results = []
     for code in args.stocks:
         result = generate_context(
             code,
@@ -35,19 +36,14 @@ def cmd_context(args):
             price_mode=args.mode,
             include_prompt=not args.no_prompt,
         )
+        results.append((code, result))
         print(result)
         if len(args.stocks) > 1:
             print("\n" + "=" * 80 + "\n")
 
     if args.output:
         with open(args.output, "w") as f:
-            for code in args.stocks:
-                result = generate_context(
-                    code,
-                    days=args.days,
-                    price_mode=args.mode,
-                    include_prompt=not args.no_prompt,
-                )
+            for code, result in results:
                 f.write(f"# Stock: {code}\n")
                 f.write(result)
                 f.write("\n\n" + "=" * 80 + "\n\n")
@@ -227,11 +223,11 @@ def build_parser():
     subparsers = parser.add_subparsers(dest="command", help="子命令")
 
     # context
-    p_ctx = subparsers.add_parser("context", help="生成完整分析上下文（基本面+行情+prompt）")
+    p_ctx = subparsers.add_parser("context", help="生成完整分析上下文（行情+基本面+prompt）")
     p_ctx.add_argument("stocks", nargs="+", help="股票代码（空格分隔）")
     p_ctx.add_argument("--days", type=int, default=120, help="天数（默认120）")
     p_ctx.add_argument("--mode", choices=["summary", "full"], default="summary",
-                        help="行情模式: summary=摘要(默认), full=完整120天表格")
+                         help="行情模式: summary=摘要(默认), full=完整120天表格")
     p_ctx.add_argument("--no-prompt", action="store_true", help="不附加分析prompt")
     p_ctx.add_argument("--output", type=str, help="写入文件而非输出到终端")
     p_ctx.add_argument("--format", choices=["text", "json"], default="text")
@@ -259,8 +255,10 @@ def build_parser():
 
     # screen
     p_screen = subparsers.add_parser("screen", help="按基本面风险筛选股票")
-    p_screen.add_argument("--exclude-red", action="store_true", default=True,
-                           help="排除红色警报股（默认开启）")
+    p_screen.add_argument("--exclude-red", dest="exclude_red", action="store_true",
+                           default=True, help="排除红色警报股（默认开启）")
+    p_screen.add_argument("--no-exclude-red", dest="exclude_red", action="store_false",
+                           help="不排除红色警报股")
     p_screen.add_argument("--green-only", action="store_true",
                            help="只显示绿色安全股（未质押+低盈余管理+四大）")
     p_screen.add_argument("--limit", type=int, default=100, help="最大数量")

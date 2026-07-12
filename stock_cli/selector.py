@@ -28,15 +28,17 @@ SUB_AGENT_PROMPT_TEMPLATE = """你是A股分析子agent（批次 {batch_id}/{tot
 
 对每只股票执行以下操作：
 
-1. 获取上下文数据：
-   python3 -m stock_cli context {first_stock} --days 120
+1. 获取上下文数据（对每只股票都执行）：
+   python3 -m stock_cli context <股票代码> --days 120
 
-2. 按stock-analysis Skill的5步框架分析：
+2. 按stock-analysis Skill的5步框架分析（见 ~/.agents/skills/stock-analysis/SKILL.md）：
    - 第1步：趋势判断（MA10/MA30、相对强弱、当前位置）
    - 第2步：形态识别（强势股回调形态、企稳信号检测）
    - 第3步：买点判断（两步验证法、支撑位、止损位）
    - 第4步：基本面排雷（质押+盈余管理+四大审计风险矩阵）
    - 第5步：综合操作建议（买入/观望/不买、仓位、卖点预设）
+
+   注意：行情优先，先做技术分析（楚云风策略），再做基本面排雷。
 
 3. 对每只股票返回以下结构化结果：
    股票代码: XXXXXX.XX
@@ -103,7 +105,6 @@ def run_select(
             total_batches=n_batches,
             stock_count=len(batch_stocks),
             stock_list="\n".join(f"  - {code}" for code in batch_stocks),
-            first_stock=batch_stocks[0],
         )
 
         batches.append({

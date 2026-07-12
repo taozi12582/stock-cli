@@ -47,7 +47,7 @@ def risk_label(level):
 
 
 def is_red_alert(pledge_status, em_level, big4_audit):
-    if pledge_status in ("高比例", "刚解押"):
+    if pledge_status in ("高比例质押", "刚解押"):
         return True
     if em_level == "高" and big4_audit == "否":
         return True
@@ -56,7 +56,7 @@ def is_red_alert(pledge_status, em_level, big4_audit):
 
 def is_green(pledge_status, em_level, big4_audit):
     return (
-        pledge_status in ("未质押", "低比例")
+        pledge_status in ("未质押", "低比例质押")
         and em_level == "低"
         and big4_audit == "是"
     )
