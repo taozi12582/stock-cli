@@ -155,13 +155,42 @@ def _safe_float(val, default=0.0):
 
 def cmd_screener(args):
     from stock_cli.screener import run_screener
-    run_screener(
+    if args.format == "json":
+        result = run_screener(
+            min_amount=args.min_amount,
+            max_pullback=args.max_pullback,
+            min_uptrend_gain=args.min_uptrend_gain,
+            min_history_days=args.min_history_days,
+            fundamental_filter=not args.no_fundamental_filter,
+            top_n=args.top_n,
+            quiet=True,
+        )
+        import json as _json
+        for c in result:
+            c.pop("_recent_data", None)
+        print(_json.dumps(result, ensure_ascii=False, indent=2, default=str))
+    else:
+        run_screener(
+            min_amount=args.min_amount,
+            max_pullback=args.max_pullback,
+            min_uptrend_gain=args.min_uptrend_gain,
+            min_history_days=args.min_history_days,
+            fundamental_filter=not args.no_fundamental_filter,
+            top_n=args.top_n,
+        )
+
+
+def cmd_select(args):
+    from stock_cli.selector import run_select
+    run_select(
+        top_n=args.top_n,
+        agents=args.agents,
         min_amount=args.min_amount,
         max_pullback=args.max_pullback,
         min_uptrend_gain=args.min_uptrend_gain,
         min_history_days=args.min_history_days,
         fundamental_filter=not args.no_fundamental_filter,
-        top_n=args.top_n,
+        format=args.format,
     )
 
 
@@ -251,7 +280,27 @@ def build_parser():
     p_scr.add_argument("--no-fundamental-filter", action="store_true",
                         help="跳过基本面排雷")
     p_scr.add_argument("--top-n", type=int, default=50, help="最多输出数量")
+    p_scr.add_argument("--format", choices=["text", "json"], default="text",
+                        help="输出格式")
     p_scr.set_defaults(func=cmd_screener)
+
+    # select
+    p_sel = subparsers.add_parser("select", help="选股编排（初筛→分批→子agent prompt）")
+    p_sel.add_argument("--top-n", type=int, default=50, help="初筛最多输出数量")
+    p_sel.add_argument("--agents", type=int, default=10, help="子agent数量，默认10")
+    p_sel.add_argument("--min-amount", type=float, default=2.0,
+                        help="最低日均成交额(亿)，默认2亿")
+    p_sel.add_argument("--max-pullback", type=float, default=0.382,
+                        help="最大回调比例(0-1)，默认0.382")
+    p_sel.add_argument("--min-uptrend-gain", type=float, default=0.15,
+                        help="前波上涨最低涨幅(0-1)，默认0.15")
+    p_sel.add_argument("--min-history-days", type=int, default=60,
+                        help="最低历史交易日数，默认60")
+    p_sel.add_argument("--no-fundamental-filter", action="store_true",
+                        help="跳过基本面排雷")
+    p_sel.add_argument("--format", choices=["text", "json"], default="text",
+                        help="输出格式: text=人类可读, json=机器可读")
+    p_sel.set_defaults(func=cmd_select)
 
     return parser
 

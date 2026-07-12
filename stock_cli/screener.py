@@ -26,22 +26,31 @@ def run_screener(
     min_history_days=60,
     fundamental_filter=True,
     top_n=50,
+    quiet=False,
 ):
+    """运行初筛，返回候选股列表。
+    
+    quiet=True时不在stdout输出进度信息，只返回结果。
+    """
     conn = get_connection()
     cursor = conn.cursor()
 
-    print("=== 楚云风选股初筛 ===")
-    print(f"参数: 最低日均成交额={min_amount}亿 | 最大回调比例={max_pullback*100:.1f}% | "
-          f"最低涨幅={min_uptrend_gain*100:.0f}% | 最低历史={min_history_days}天")
-    print()
+    def log(msg):
+        if not quiet:
+            print(msg)
+
+    log("=== 楚云风选股初筛 ===")
+    log(f"参数: 最低日均成交额={min_amount}亿 | 最大回调比例={max_pullback*100:.1f}% | "
+        f"最低涨幅={min_uptrend_gain*100:.0f}% | 最低历史={min_history_days}天")
+    log("")
 
     # Step 0: Get latest trade date
     cursor.execute(f"SELECT MAX(trade_date) FROM {STOCK_INFO_TABLE}")
     latest_date = cursor.fetchone()[0]
-    print(f"最新交易日: {latest_date}")
+    log(f"最新交易日: {latest_date}")
 
     # Step 1: Liquidity filter - 5-day avg amount >= min_amount 亿
-    print("\n[1/5] 流动性过滤...")
+    log("\n[1/5] 流动性过滤...")
     cursor.execute(f"""
         SELECT ts_code, AVG(amount) as avg_amount, COUNT(*) as days
         FROM {STOCK_INFO_TABLE}
@@ -51,15 +60,15 @@ def run_screener(
         HAVING avg_amount >= %s AND days >= 3
     """, (latest_date, latest_date, min_amount * 1e5))
     liquid_stocks = {r[0]: r[1] for r in cursor.fetchall()}
-    print(f"  通过: {len(liquid_stocks)} 只 (日均成交额 >= {min_amount}亿)")
+    log(f"  通过: {len(liquid_stocks)} 只 (日均成交额 >= {min_amount}亿)")
 
     if not liquid_stocks:
-        print("  无股票通过流动性过滤")
+        log("  无股票通过流动性过滤")
         conn.close()
         return []
 
     # Step 2: Get market average 20-day return (compute from all stocks)
-    print("\n[2/5] 计算市场基准...")
+    log("\n[2/5] 计算市场基准...")
     cursor.execute(f"""
         SELECT AVG(pct_chg) as avg_daily
         FROM {STOCK_INFO_TABLE}
@@ -86,11 +95,11 @@ def run_screener(
         ) x
     """, (latest_date, latest_date))
     market_20d_ret = float(cursor.fetchone()[0] or 0)
-    print(f"  市场日均涨幅: {market_avg_daily:.3f}%")
-    print(f"  市场20日涨幅: {market_20d_ret*100:.2f}%")
+    log(f"  市场日均涨幅: {market_avg_daily:.3f}%")
+    log(f"  市场20日涨幅: {market_20d_ret*100:.2f}%")
 
     # Step 3: For liquid stocks, fetch last 60 days data and compute indicators
-    print("\n[3/5] 强势+回调形态筛选...")
+    log("\n[3/5] 强势+回调形态筛选...")
     candidates = []
 
     stock_codes = list(liquid_stocks.keys())
@@ -134,10 +143,10 @@ def run_screener(
             if result:
                 candidates.append(result)
 
-    print(f"  通过: {len(candidates)} 只 (强势+回调形态)")
+    log(f"  通过: {len(candidates)} 只 (强势+回调形态)")
 
     # Step 4: Stabilization signals
-    print("\n[4/5] 企稳信号检测...")
+    log("\n[4/5] 企稳信号检测...")
     stabilized = []
     for c in candidates:
         sig = _check_stabilization(c["_recent_data"])
@@ -145,13 +154,13 @@ def run_screener(
             c["stabilization"] = sig
             stabilized.append(c)
 
-    print(f"  通过: {len(stabilized)} 只 (检测到企稳信号)")
+    log(f"  通过: {len(stabilized)} 只 (检测到企稳信号)")
     for s in stabilized[:5]:
-        print(f"    {s['ts_code']}: {s['stabilization']}")
+        log(f"    {s['ts_code']}: {s['stabilization']}")
 
     # Step 5: Fundamental risk filter
     if fundamental_filter and stabilized:
-        print("\n[5/5] 基本面排雷...")
+        log("\n[5/5] 基本面排雷...")
         filtered = []
         for c in stabilized:
             cursor.execute(f"""
@@ -170,28 +179,32 @@ def run_screener(
                 c["em_level"] = em or "未知"
                 c["big4"] = big4 or "未知"
             filtered.append(c)
-        print(f"  通过: {len(filtered)} 只 (排除红色警报)")
+        log(f"  通过: {len(filtered)} 只 (排除红色警报)")
         result = filtered[:top_n]
     else:
         result = stabilized[:top_n]
 
     conn.close()
 
+    # Clean internal field
+    for c in result:
+        c.pop("_recent_data", None)
+
     # Output
-    print(f"\n=== 初筛结果: {len(result)} 只候选股 ===\n")
-    if result:
-        print(f"{'股票代码':12s} {'20日涨幅':>8s} {'回调深度':>8s} {'量缩':>5s} {'企稳信号':20s} "
-              f"{'质押':8s} {'盈余':6s} {'四大':4s}")
-        print("-" * 90)
+    log(f"\n=== 初筛结果: {len(result)} 只候选股 ===\n")
+    if result and not quiet:
+        log(f"{'股票代码':12s} {'20日涨幅':>8s} {'回调深度':>8s} {'量缩':>5s} {'企稳信号':20s} "
+            f"{'质押':8s} {'盈余':6s} {'四大':4s}")
+        log("-" * 90)
         for c in result:
-            print(f"{c['ts_code']:12s} "
-                  f"{c['ret_20d']*100:>7.1f}% "
-                  f"{c['pullback_depth']*100:>7.1f}% "
-                  f"{'是' if c['vol_shrink'] else '否':>5s} "
-                  f"{c.get('stabilization',''):20s} "
-                  f"{c.get('pledge_status',''):8s} "
-                  f"{c.get('em_level',''):6s} "
-                  f"{c.get('big4',''):4s}")
+            log(f"{c['ts_code']:12s} "
+                f"{c['ret_20d']*100:>7.1f}% "
+                f"{c['pullback_depth']*100:>7.1f}% "
+                f"{'是' if c['vol_shrink'] else '否':>5s} "
+                f"{c.get('stabilization',''):20s} "
+                f"{c.get('pledge_status',''):8s} "
+                f"{c.get('em_level',''):6s} "
+                f"{c.get('big4',''):4s}")
 
     return result
 
