@@ -10,6 +10,8 @@ stock-cli: A股股票数据CLI工具
   python3 -m stock_cli risk 000001.SZ 600519.SH 000858.SZ
   python3 -m stock_cli screen --exclude-red --limit 50
   python3 -m stock_cli screener
+  python3 -m stock_cli update          # 更新数据
+  python3 -m stock_cli update --check  # 只检查
 """
 
 import argparse
@@ -190,6 +192,47 @@ def cmd_select(args):
     )
 
 
+def cmd_update(args):
+    from stock_cli.update import check_data, run_update
+    latest_stock, latest_fund, gap = check_data()
+    if args.format == "json":
+        import json as _json
+        status = {
+            "latest_stock_date": str(latest_stock) if latest_stock else None,
+            "latest_fund_date": str(latest_fund) if latest_fund else None,
+            "gap_days": gap,
+            "needs_update": gap > 0,
+        }
+        if args.check:
+            print(_json.dumps(status, ensure_ascii=False, indent=2))
+            return
+        print(_json.dumps(status, ensure_ascii=False, indent=2), file=sys.stderr)
+    else:
+        print(f"stock_info 最新: {latest_stock}")
+        print(f"fundamental_info 最新: {latest_fund}")
+        print(f"数据缺口: {gap} 天")
+        if gap <= 0:
+            print("数据已是最新")
+            return
+        if args.check:
+            print("需要更新，运行 `python3 -m stock_cli update` 补全")
+            return
+
+    if args.check:
+        return
+
+    target = None
+    if args.date:
+        from datetime import datetime
+        target = datetime.strptime(args.date, "%Y-%m-%d").date()
+
+    run_update(
+        target_date=target,
+        skip_fundamental=args.skip_fundamental,
+        quiet=(args.format == "json"),
+    )
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="stock-cli",
@@ -217,6 +260,10 @@ def build_parser():
 
   # 排除红色警报股
   python3 -m stock_cli screen --exclude-red --limit 100
+
+  # 更新数据（检查缺口并补全）
+  python3 -m stock_cli update --check
+  python3 -m stock_cli update
 """,
     )
 
@@ -299,6 +346,18 @@ def build_parser():
     p_sel.add_argument("--format", choices=["text", "json"], default="text",
                         help="输出格式: text=人类可读, json=机器可读")
     p_sel.set_defaults(func=cmd_select)
+
+    # update
+    p_upd = subparsers.add_parser("update", help="检查并更新行情+基本面数据")
+    p_upd.add_argument("--check", action="store_true",
+                        help="只检查数据状态，不更新")
+    p_upd.add_argument("--date", type=str, default=None,
+                        help="目标日期 YYYY-MM-DD（默认今天）")
+    p_upd.add_argument("--skip-fundamental", action="store_true",
+                        help="跳过基本面更新（只更新行情）")
+    p_upd.add_argument("--format", choices=["text", "json"], default="text",
+                        help="输出格式")
+    p_upd.set_defaults(func=cmd_update)
 
     return parser
 
