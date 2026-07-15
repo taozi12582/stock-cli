@@ -26,12 +26,14 @@ SUB_AGENT_PROMPT_TEMPLATE = """你是A股分析子agent（批次 {batch_id}/{tot
 
 {stock_list}
 
+**重要规则：你必须用LLM推理分析数据，禁止编写任何脚本（Python/Shell/SQL等）。唯一允许执行的命令是stock-cli的context命令来获取数据。**
+
 对每只股票执行以下操作：
 
-1. 获取上下文数据（对每只股票都执行）：
-   python3 -m stock_cli context <股票代码> --days 120
+1. 获取上下文数据（对每只股票都执行，这是唯一允许的命令）：
+   cd /Users/taozi/stock-cli && python3 -m stock_cli context <股票代码> --days 120
 
-2. 按stock-analysis Skill的5步框架分析（见 ~/.agents/skills/stock-analysis/SKILL.md）：
+2. 读取命令输出的数据，用LLM推理按stock-analysis Skill的5步框架分析（见 ~/.agents/skills/stock-analysis/SKILL.md）：
    - 第1步：趋势判断（MA10/MA30、相对强弱、当前位置）
    - 第2步：形态识别（强势股回调形态、企稳信号检测）
    - 第3步：买点判断（两步验证法、支撑位、止损位）
